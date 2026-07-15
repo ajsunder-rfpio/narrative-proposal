@@ -216,4 +216,55 @@ describe("edge handlers reject unauthenticated calls and delegate to the agent m
     expect(res.status).toBe(401);
     expect(parse).not.toHaveBeenCalled();
   });
+
+  // Mirrors the lazy production runtime: with no env vars, every env-backed
+  // dependency throws on first use. The handler must authenticate header-first,
+  // so an unauthenticated request 401s without ever touching any of them — and
+  // a config error on an authenticated request is a clean 500, not a crash.
+  it("returns 401 with zero runtime access when no bearer token is present", async () => {
+    const missingEnv = () => {
+      throw new Error("ANTHROPIC_API_KEY is not set");
+    };
+    const verifyToken = vi.fn(() => {
+      throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set");
+    });
+    const load = vi.fn(missingEnv);
+    const parse = vi.fn();
+    const handler = createIntakeParseHandler({
+      repository: { load, save: async () => {} },
+      verifyToken,
+      llm: { complete: missingEnv } as unknown as LLM,
+      config,
+      makeAgent: () => ({ parse }),
+      readSource: { read: () => "" },
+    });
+
+    const res = await handler(anonReq({ pursuit_id: "Pursuit_1" }));
+    expect(res.status).toBe(401);
+    // None of the env-backed pieces were constructed or used.
+    expect(verifyToken).not.toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+    expect(parse).not.toHaveBeenCalled();
+  });
+
+  it("turns a config error on an authenticated request into a clean 500 JSON naming the var", async () => {
+    const handler = createIntakeParseHandler({
+      repository: {
+        load: async () => {
+          throw new Error("ANTHROPIC_API_KEY is not set");
+        },
+        save: async () => {},
+      },
+      verifyToken: () => ({ userId: "u1" }), // authenticated
+      llm,
+      config,
+      makeAgent: () => ({ parse: vi.fn() }),
+      readSource: { read: () => "" },
+    });
+
+    const res = await handler(authedReq({ pursuit_id: "Pursuit_1" }));
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("ANTHROPIC_API_KEY");
+  });
 });
