@@ -39,4 +39,19 @@ export class IdFactory {
   isRetired(id: string): boolean {
     return this.retired.has(id);
   }
+
+  /**
+   * Serializable state for persistence. The counter high-water mark and the
+   * retired set must survive a load/save round-trip, or the "ids never reused"
+   * guarantee breaks across process restarts.
+   */
+  snapshot(): { counter: number; retired: string[] } {
+    return { counter: this.counter, retired: [...this.retired] };
+  }
+
+  restore(state: { counter: number; retired: readonly string[] }): void {
+    this.counter = state.counter;
+    this.retired.clear();
+    for (const id of state.retired) this.retired.add(id);
+  }
 }

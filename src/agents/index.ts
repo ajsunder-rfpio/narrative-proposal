@@ -3,6 +3,7 @@
 // Theme, Evaluator — see docs/spec/narrative-proposal-agent-definitions.md) land
 // later and will consume these same seams.
 export * from "./fake-llm";
+export * from "./anthropic-llm";
 export * from "./retrieval";
 export * from "./drafting";
 export * from "./verifier";

@@ -46,6 +46,36 @@ import type {
   EvaluatorScore,
 } from "./types";
 
+/**
+ * A pursuit's full graph state, serialized. The persistence seam between the
+ * in-memory GraphStore and any durable store (see exportPursuit / importPursuit).
+ * Outline provenance rides alongside each node; the id-factory high-water mark
+ * and retired set ride in `id_state` so id permanence survives a round-trip.
+ */
+export interface PursuitExport {
+  pursuit: Pursuit;
+  intake_sources: IntakeSource[];
+  requirements: Requirement[];
+  requirement_mappings: RequirementMapping[];
+  outline_nodes: Array<{
+    node: OutlineNode;
+    origin: "agent" | "human" | null;
+    template_key: string | null;
+  }>;
+  sections: Section[];
+  section_revisions: SectionRevision[];
+  win_themes: WinTheme[];
+  claims: Claim[];
+  citations: Citation[];
+  assets: Asset[];
+  passages: Passage[];
+  generation_records: GenerationRecord[];
+  snapshots: PursuitSnapshot[];
+  evaluator_reports: EvaluatorReport[];
+  pursuit_context: PursuitContext | null;
+  id_state: { counter: number; retired: string[] };
+}
+
 /** Thrown when a caller attempts a write outside its granted scope, or trips a
  *  human gate. Message always names the violated rule. */
 export class GraphError extends Error {
@@ -926,6 +956,128 @@ export class GraphStore implements CoverageView {
 
   node(nodeId: OutlineNodeId): OutlineNode | undefined {
     return this.nodes.get(nodeId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Persistence seam: export / import a pursuit's full graph state.
+  //
+  // A Supabase-backed repository can't be a drop-in for this synchronous store
+  // (agents call it without awaiting, and the graph invariants are enforced
+  // synchronously). So persistence is load -> run -> save: hydrate a fresh
+  // in-memory store, run the agent, dehydrate. These two methods are that seam.
+  // importPursuit is privileged — it restores guarded fields (stage,
+  // verification_status) and outline provenance from persisted truth, which is
+  // system rehydration, not an agent write.
+  // -------------------------------------------------------------------------
+
+  exportPursuit(pursuitId: PursuitId): PursuitExport {
+    const nodeIds = new Set(this.listNodes(pursuitId).map((n) => n.id));
+    const sections = [...this.sections.values()].filter((s) =>
+      nodeIds.has(s.node_id),
+    );
+    const sectionIds = new Set(sections.map((s) => s.id));
+    return {
+      pursuit: this.require(this.pursuits.get(pursuitId), "Pursuit", pursuitId),
+      intake_sources: [...this.intakeSources.values()].filter(
+        (s) => s.pursuit_id === pursuitId,
+      ),
+      requirements: [...this.requirements.values()].filter(
+        (r) => r.pursuit_id === pursuitId,
+      ),
+      requirement_mappings: [...this.mappings.values()].filter((m) =>
+        [...this.requirements.values()].some(
+          (r) => r.id === m.requirement_id && r.pursuit_id === pursuitId,
+        ),
+      ),
+      outline_nodes: this.listNodes(pursuitId).map((node) => ({
+        node,
+        origin: this.nodeOrigin.get(node.id) ?? null,
+        template_key: this.nodeTemplateKey.get(node.id) ?? null,
+      })),
+      sections,
+      section_revisions: [...this.revisions.values()].filter((r) =>
+        sectionIds.has(r.section_id),
+      ),
+      win_themes: [...this.themes.values()].filter(
+        (t) => t.pursuit_id === pursuitId,
+      ),
+      claims: [...this.claims.values()].filter((c) => sectionIds.has(c.section_id)),
+      citations: [...this.citations.values()].filter((c) =>
+        [...this.claims.values()].some(
+          (cl) => cl.id === c.claim_id && sectionIds.has(cl.section_id),
+        ),
+      ),
+      assets: [...this.assets.values()],
+      passages: [...this.passages.values()],
+      generation_records: [...this.generationRecords.values()].filter(
+        (g) => g.pursuit_id === pursuitId,
+      ),
+      snapshots: [...this.snapshots.values()].filter(
+        (s) => s.pursuit_id === pursuitId,
+      ),
+      evaluator_reports: [...this.evaluatorReports.values()].filter(
+        (r) => r.pursuit_id === pursuitId,
+      ),
+      pursuit_context: this.pursuitContexts.get(pursuitId) ?? null,
+      id_state: this.ids.snapshot(),
+    };
+  }
+
+  importPursuit(data: PursuitExport): void {
+    this.pursuits.set(data.pursuit.id, deepFreeze({ ...data.pursuit }));
+    for (const s of data.intake_sources)
+      this.intakeSources.set(s.id, deepFreeze({ ...s }));
+    for (const r of data.requirements)
+      this.requirements.set(r.id, deepFreeze({ ...r }));
+    for (const m of data.requirement_mappings)
+      this.mappings.set(m.id, deepFreeze({ ...m }));
+    for (const entry of data.outline_nodes) {
+      this.nodes.set(entry.node.id, deepFreeze({ ...entry.node }));
+      if (entry.origin) this.nodeOrigin.set(entry.node.id, entry.origin);
+      if (entry.template_key)
+        this.nodeTemplateKey.set(entry.node.id, entry.template_key);
+    }
+    for (const s of data.sections) {
+      this.sections.set(s.id, deepFreeze({ ...s }));
+      this.sectionByNode.set(s.node_id, s.id);
+    }
+    for (const r of data.section_revisions)
+      this.revisions.set(r.id, deepFreeze({ ...r }));
+    for (const t of data.win_themes) this.themes.set(t.id, deepFreeze({ ...t }));
+    for (const c of data.claims) {
+      this.claims.set(c.id, deepFreeze({ ...c }));
+      const list = this.claimsBySection.get(c.section_id) ?? [];
+      list.push(c.id);
+      this.claimsBySection.set(c.section_id, list);
+    }
+    for (const c of data.citations)
+      this.citations.set(c.id, deepFreeze({ ...c }));
+    for (const a of data.assets) this.assets.set(a.id, deepFreeze({ ...a }));
+    for (const p of data.passages) this.passages.set(p.id, deepFreeze({ ...p }));
+    for (const g of data.generation_records)
+      this.generationRecords.set(g.id, deepFreeze({ ...g }));
+    for (const s of data.snapshots) this.snapshots.set(s.id, deepFreeze({ ...s }));
+    for (const r of data.evaluator_reports)
+      this.evaluatorReports.set(r.id, deepFreeze({ ...r }));
+    if (data.pursuit_context)
+      this.pursuitContexts.set(
+        data.pursuit_context.pursuit_id,
+        deepFreeze({ ...data.pursuit_context }),
+      );
+    this.ids.restore(data.id_state);
+  }
+
+  /** Assets/passages the retriever can be built from (library slice). */
+  listAssets(): readonly Asset[] {
+    return [...this.assets.values()];
+  }
+  listPassages(): readonly Passage[] {
+    return [...this.passages.values()];
+  }
+  listIntakeSources(pursuitId: PursuitId): readonly IntakeSource[] {
+    return [...this.intakeSources.values()].filter(
+      (s) => s.pursuit_id === pursuitId,
+    );
   }
 
   // -------------------------------------------------------------------------

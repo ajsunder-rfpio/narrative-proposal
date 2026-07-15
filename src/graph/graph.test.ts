@@ -391,3 +391,61 @@ describe("coverage is computed, never stored", () => {
     expect("coverage_status" in req).toBe(false);
   });
 });
+
+describe("persistence seam: export / import round-trip", () => {
+  it("rehydrates a pursuit's full graph state, preserving guarded fields, provenance, and id permanence", () => {
+    const store = makeStore();
+    const pursuit = newPursuit(store);
+
+    // Build a rich state exercising the guarded fields and provenance.
+    store.addIntakeSource({ pursuit_id: pursuit, kind: "transcript", uri: "s3://t" });
+    const node = store.addNode({ pursuit_id: pursuit, order: 0, title: "Approach" });
+    store.tagOutlineNode(node.id, "approach");
+    store.editNodeAsHuman(node.id, { title: "Human Approach" }); // origin -> human
+    const deleted = store.addNode({ pursuit_id: pursuit, order: 1, title: "Temp" });
+    store.deleteNode(deleted.id); // retires an id
+    const section = store.createSection(node.id);
+    const rev = store.commitRevision({
+      section_id: section.id,
+      content: "We are proven.",
+      author: { by: "agent", agent: "drafting" },
+    });
+    const claim = store.addClaim({
+      section_id: section.id,
+      anchor: { revision_id: rev.id, start: 0, end: 14 },
+      text: "We are proven.",
+    });
+    store.verifier().setVerificationStatus(claim.id, "unsupported");
+    const theme = store.createTheme({ pursuit_id: pursuit, kind: "theme", text: "Speed" });
+    store.lockTheme(theme.id, USER);
+    store.orchestrator().setStage(pursuit, "outline");
+
+    const dump = store.exportPursuit(pursuit);
+
+    // Rehydrate into a brand-new store.
+    const restored = new GraphStore();
+    restored.importPursuit(dump);
+
+    // Guarded fields survived intact.
+    expect(restored.getPursuit(pursuit)?.stage).toBe("outline");
+    expect(restored.getClaim(claim.id)?.verification_status).toBe("unsupported");
+    expect(restored.getTheme(theme.id)?.status).toBe("locked");
+
+    // Content + provenance survived.
+    expect(restored.getRevision(rev.id)?.content).toBe("We are proven.");
+    expect(restored.getNode(node.id)?.title).toBe("Human Approach");
+    expect(restored.outlineNodeOrigin(node.id)).toBe("human");
+    expect(restored.findOutlineNodeByTemplateKey(pursuit, "approach")?.id).toBe(node.id);
+
+    // Restored records are still frozen — guards remain in force.
+    expect(() =>
+      // @ts-expect-error verification_status excluded from the patch type
+      restored.updateClaim(claim.id, { verification_status: "verified" }),
+    ).toThrow(GraphError);
+
+    // Id permanence: a fresh mint never collides with the deleted node's id.
+    const fresh = restored.addNode({ pursuit_id: pursuit, order: 2, title: "New" });
+    expect(fresh.id).not.toBe(deleted.id);
+    expect(fresh.id).not.toBe(node.id);
+  });
+});

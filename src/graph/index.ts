@@ -8,4 +8,5 @@ export {
   type OrchestratorScope,
   type VerifierScope,
   type GraphStoreOptions,
+  type PursuitExport,
 } from "./store";
