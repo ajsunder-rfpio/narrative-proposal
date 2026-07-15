@@ -10,3 +10,4 @@ export * from "./intake";
 export * from "./outline";
 export * from "./theme";
 export * from "./orchestrator";
+export * from "./evaluator";
