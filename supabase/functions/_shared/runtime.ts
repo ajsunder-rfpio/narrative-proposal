@@ -1,17 +1,18 @@
 // Deno-only. Builds the real dependencies the entrypoints inject into the thin
-// handlers: Supabase repository, JWT verifier, Anthropic LLM, and config.
+// handlers: Supabase repository, JWT verifier, Anthropic LLM, source reader, and
+// config.
 //
 // Construction is LAZY. Nothing that reads env is built at module load — the
 // entrypoints call baseRuntime() at import, but it only wires closures. The
 // env-backed pieces are constructed on first use:
-//   - the Supabase client only when a token is actually verified (which the
-//     handler does AFTER its header check, so an unauthenticated request never
-//     touches env);
-//   - the Anthropic LLM only when the agent makes its first call (i.e. after
-//     authentication).
+//   - the Supabase client only when a token is actually verified, a graph load
+//     runs, or a source is downloaded (all AFTER the handler's header check, so
+//     an unauthenticated request never touches env);
+//   - the Anthropic LLM only when the agent makes its first call.
 // A missing env var therefore throws inside the handler's try/catch and becomes
 // a clean 500 JSON naming the var, never a worker crash at import time.
 
+import { unzipSync } from "npm:fflate@0.8.3";
 import { serviceClient, makeTokenVerifier } from "./supabase-client.ts";
 import { SupabaseGraphRepository } from "./repository-supabase.ts";
 import { loadConfig, anthropicApiKey } from "./config.ts";
@@ -19,6 +20,10 @@ import type { EdgeConfig } from "./handlers.ts";
 import type { GraphRepository } from "./repository.ts";
 import { AnthropicLLM } from "../../../src/agents/anthropic-llm.ts";
 import { InMemoryLibrary, type Retriever } from "../../../src/agents/retrieval.ts";
+import {
+  StorageSourceReader,
+  type StorageObjectReader,
+} from "../../../src/agents/source-reader.ts";
 import type {
   LLM,
   LLMRequest,
@@ -41,6 +46,11 @@ function once<T>(factory: () => T): () => T {
   };
 }
 
+// Module-level lazy Supabase client, shared by every env-backed dependency.
+// serviceClient() (which reads SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) runs
+// only on first use, never at import.
+const lazyClient = once(() => serviceClient());
+
 export interface BaseRuntime {
   repository: GraphRepository;
   verifyToken: (token: string) => Promise<{ userId: string } | null>;
@@ -52,21 +62,19 @@ export function baseRuntime(): BaseRuntime {
   // loadConfig only reads optional vars (with defaults) — safe at import.
   const config = loadConfig();
 
-  // Env-reading singletons, deferred to first use.
-  const client = once(() => serviceClient());
   const realLLM = once(
     () => new AnthropicLLM({ apiKey: anthropicApiKey(), model: config.model }),
   );
 
-  // The verifier closure is only INVOKED by requireAuth after its header check,
-  // so a request with no bearer token never constructs the Supabase client.
-  const verifyToken = (token: string) => makeTokenVerifier(client())(token);
+  // Invoked by requireAuth only after its header check, so a request with no
+  // bearer token never constructs the Supabase client.
+  const verifyToken = (token: string) =>
+    makeTokenVerifier(lazyClient())(token);
 
-  // Repository + LLM are only used during the work phase, after authentication.
   const repository: GraphRepository = {
-    load: (id: PursuitId) => new SupabaseGraphRepository(client()).load(id),
+    load: (id: PursuitId) => new SupabaseGraphRepository(lazyClient()).load(id),
     save: (id: PursuitId, store: GraphStore) =>
-      new SupabaseGraphRepository(client()).save(id, store),
+      new SupabaseGraphRepository(lazyClient()).save(id, store),
   };
   const llm: LLM = {
     complete: (request: LLMRequest): Promise<LLMResponse> =>
@@ -90,6 +98,27 @@ export function retrieverFor(store: GraphStore): Retriever {
   return new InMemoryLibrary([...grouped.values()]);
 }
 
-// Placeholder: production ingestion of IntakeSource content (fetching by
-// `uri` from storage) is a follow-up. The interface seam is wired here.
-export const sourceReader: SourceContentReader = { read: () => "" };
+// Real source reader over Storage. The download closure builds the Supabase
+// client lazily (on first use, after auth) and is only invoked by the Intake
+// agent during work — a config error therefore surfaces as a 500, not a crash.
+function splitStorageUri(uri: string): { bucket: string; path: string } {
+  const slash = uri.indexOf("/");
+  if (slash <= 0) throw new Error(`invalid storage uri: ${uri}`);
+  return { bucket: uri.slice(0, slash), path: uri.slice(slash + 1) };
+}
+
+const storage: StorageObjectReader = {
+  async download(uri: string): Promise<Uint8Array> {
+    const { bucket, path } = splitStorageUri(uri);
+    const { data, error } = await lazyClient().storage.from(bucket).download(path);
+    if (error || !data) {
+      throw new Error(error?.message ?? `object not found: ${uri}`);
+    }
+    return new Uint8Array(await data.arrayBuffer());
+  },
+};
+
+export const sourceReader: SourceContentReader = new StorageSourceReader({
+  storage,
+  unzip: (bytes) => unzipSync(bytes),
+});

@@ -59,11 +59,21 @@ curl -s http://127.0.0.1:54321/functions/v1/evaluate \
   -d '{"pursuit_id":"Pursuit_1"}'
 ```
 
+## Intake source content
+
+Uploads land in the private `intake-sources` Storage bucket (migration
+`0002`); an `IntakeSource.uri` is `"<bucket>/<path>"`. `runtime.sourceReader`
+downloads the object and decodes it: `.txt`/`.md` and `.csv` as UTF-8, `.docx`
+by unzip + text extraction, and `data:` URIs for pasted text. An unreadable,
+empty, or unsupported source is recorded as `parse_status: "failed"` with a
+reason; that source grounds nothing and its fields report `not_found`.
+
+**PDF is not implemented** — see the maintainer note; a `.pdf` source fails
+with an explicit reason rather than pulling a heavy extractor into the runtime.
+
 ## Known follow-ups (seams in place, not yet wired)
 
-- **Source-content ingestion.** `runtime.sourceReader` returns `""`; fetching
-  `IntakeSource.uri` from storage is a later branch. Until then the Intake
-  agent grounds nothing in production (every fact drops — by design, never
-  guessed).
+- **PDF ingestion.** Deferred (heavy edge dependency); currently a `.pdf`
+  source fails with a clear reason.
 - **Normalized columns.** Entities persist as JSONB with extracted key columns;
   column-per-field tables can follow without touching the export/import seam.
