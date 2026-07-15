@@ -29,9 +29,12 @@ export const CONTEXT_FIELD_KEYS: readonly ContextFieldKey[] = [
   "competitive_mentions",
 ];
 
-/** How the agent reads a source's content (the object model stores only a uri). */
+/** How the agent reads a source's content (the object model stores only a uri).
+ *  Async so a real reader can fetch from Storage; a sync fixture reader still
+ *  satisfies it (the agent awaits the result). Throwing signals an unreadable
+ *  source, and the thrown message becomes the recorded failure reason. */
 export interface SourceContentReader {
-  read(source: IntakeSource): string;
+  read(source: IntakeSource): string | Promise<string>;
 }
 
 /** Fixture reader: source id -> raw text. */
@@ -94,9 +97,30 @@ export class IntakeAgent {
     const { store, llm } = this.deps;
 
     const sourcesById = new Map(input.sources.map((s) => [s.id, s]));
-    const contents = new Map(
-      input.sources.map((s) => [s.id, input.reader.read(s)]),
-    );
+
+    // Read each source. Unreadable or empty => the failure is recorded on the
+    // source with a reason, and that source contributes no content, so it can
+    // ground nothing. Never a silent empty success (CLAUDE.md honesty rule).
+    const contents = new Map<string, string>();
+    for (const source of input.sources) {
+      let text: string;
+      try {
+        text = await input.reader.read(source);
+      } catch (err) {
+        store.setIntakeSourceParseStatus(
+          source.id,
+          "failed",
+          err instanceof Error ? err.message : String(err),
+        );
+        continue;
+      }
+      if (text.trim().length === 0) {
+        store.setIntakeSourceParseStatus(source.id, "failed", "source is empty");
+        continue;
+      }
+      contents.set(source.id, text);
+      store.setIntakeSourceParseStatus(source.id, "parsed");
+    }
 
     const messages = buildIntakeMessages(input.sources, contents);
     const raw = parseIntakeOutput(
@@ -169,8 +193,11 @@ function buildIntakeMessages(
   sources: readonly IntakeSource[],
   contents: ReadonlyMap<string, string>,
 ): LLMMessage[] {
-  const sourceBlock = sources
-    .map((s) => `[${s.id}] (${s.kind})\n${contents.get(s.id) ?? ""}`)
+  // Only successfully-read sources are shown to the model — a failed source has
+  // no content to extract from.
+  const readable = sources.filter((s) => contents.has(s.id));
+  const sourceBlock = readable
+    .map((s) => `[${s.id}] (${s.kind})\n${contents.get(s.id)}`)
     .join("\n\n");
   return [
     {
@@ -182,6 +209,9 @@ function buildIntakeMessages(
         "verbatim text copied from the cited source. Do not parse requirements. " +
         "If you cannot find a field in the sources, omit it — never guess.",
     },
-    { role: "user", content: `Sources:\n${sourceBlock}` },
+    {
+      role: "user",
+      content: `Sources:\n${sourceBlock.length ? sourceBlock : "(no readable sources)"}`,
+    },
   ];
 }

@@ -299,9 +299,34 @@ export class GraphStore implements CoverageView {
       kind: input.kind,
       uri: input.uri,
       parse_status: input.parse_status ?? "pending",
+      parse_error: null,
     };
     this.intakeSources.set(source.id, deepFreeze(source));
     return source;
+  }
+
+  getIntakeSource(id: IntakeSource["id"]): IntakeSource | undefined {
+    return this.intakeSources.get(id);
+  }
+
+  /**
+   * Record the outcome of reading/parsing a source. On failure the reason is
+   * stored (CLAUDE.md: failures reflect a reason, never a silent empty success).
+   * Not a guarded field — the Intake agent owns it as part of parsing.
+   */
+  setIntakeSourceParseStatus(
+    id: IntakeSource["id"],
+    status: ParseStatus,
+    error: string | null = null,
+  ): IntakeSource {
+    const current = this.require(this.intakeSources.get(id), "IntakeSource", id);
+    const next = deepFreeze({
+      ...current,
+      parse_status: status,
+      parse_error: status === "failed" ? error : null,
+    });
+    this.intakeSources.set(id, next);
+    return next;
   }
 
   /** The Intake agent's parsed context. Latest wins; stored as-is (frozen). */

@@ -8,6 +8,7 @@ export * from "./retrieval";
 export * from "./drafting";
 export * from "./verifier";
 export * from "./intake";
+export * from "./source-reader";
 export * from "./outline";
 export * from "./theme";
 export * from "./orchestrator";

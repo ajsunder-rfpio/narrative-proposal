@@ -129,6 +129,10 @@ export interface IntakeSource {
   readonly kind: IntakeSourceKind;
   readonly uri: string;
   readonly parse_status: ParseStatus;
+  // SPEC EXTENSION: the object model tables only parse_status. The CLAUDE.md
+  // honesty rule requires a failed parse to record WHY, so a nullable reason
+  // rides alongside the status. Populated only when parse_status is "failed".
+  readonly parse_error: string | null;
 }
 
 export type RequirementKind =
