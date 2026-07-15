@@ -1,0 +1,22 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+
+# Lovable builds with Bun; npm's lockfile drift is expected and must not be committed (see CLAUDE.md)
+package-lock.json
+
+# Local env / editor
+*.local
+.env
+.env.*
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Test / tooling caches
+coverage
+.vitest

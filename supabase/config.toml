@@ -1,0 +1,4 @@
+project_id = "narrative-proposal"
+
+[functions.orchestrate]
+verify_jwt = true
