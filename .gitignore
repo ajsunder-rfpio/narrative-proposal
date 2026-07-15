@@ -12,6 +12,7 @@ package-lock.json
 *.local
 .env
 .env.*
+!.env.example
 .DS_Store
 .vscode/*
 !.vscode/extensions.json

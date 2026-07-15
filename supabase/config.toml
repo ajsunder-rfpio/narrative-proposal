@@ -1,4 +1,24 @@
 project_id = "narrative-proposal"
 
+# One function per agent action. verify_jwt gates at the platform edge; the
+# handlers additionally verify the token themselves (defense in depth).
 [functions.orchestrate]
+verify_jwt = true
+
+[functions.intake-parse]
+verify_jwt = true
+
+[functions.outline-generate]
+verify_jwt = true
+
+[functions.themes-draft]
+verify_jwt = true
+
+[functions.section-draft]
+verify_jwt = true
+
+[functions.claims-verify]
+verify_jwt = true
+
+[functions.evaluate]
 verify_jwt = true

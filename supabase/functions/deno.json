@@ -1,0 +1,4 @@
+{
+  "//": "The shared TS under src/ uses extensionless relative imports (Vite/Node style). sloppy-imports lets Deno resolve them without editing source. supabase functions serve reads this config.",
+  "unstable": ["sloppy-imports"]
+}
