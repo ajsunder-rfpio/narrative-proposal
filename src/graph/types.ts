@@ -441,11 +441,57 @@ export interface ReviewComment {
   readonly status: ReviewCommentStatus;
 }
 
+// A PursuitSnapshot is an immutable capture of the graph slice a review or
+// export reads: the outline, each section's current content, the claims with
+// their verification verdicts AT CAPTURE TIME, and the themes with their lock
+// state. These are frozen COPIES, not live records — later live edits never
+// reach a snapshot, so "what did red team actually read / what did we ship" is
+// always answerable, and the Evaluator reads a stable draft.
+
+export interface SnapshotNode {
+  readonly node_id: OutlineNodeId;
+  readonly parent_id: OutlineNodeId | null;
+  readonly order: number;
+  readonly title: string;
+  readonly annotation: string;
+  readonly status: OutlineNodeStatus;
+}
+
+export interface SnapshotSection {
+  readonly section_id: SectionId;
+  readonly node_id: OutlineNodeId;
+  readonly current_revision_id: SectionRevisionId | null;
+  readonly content: string;
+}
+
+export interface SnapshotClaim {
+  readonly claim_id: ClaimId;
+  readonly section_id: SectionId;
+  readonly node_id: OutlineNodeId;
+  readonly text: string;
+  /** The Verifier's verdict frozen at capture time. The Evaluator consumes this
+   *  and never re-verifies. */
+  readonly verification_status: VerificationStatus;
+}
+
+export interface SnapshotTheme {
+  readonly theme_id: WinThemeId;
+  readonly kind: WinThemeKind;
+  readonly text: string;
+  readonly scope: WinThemeScope;
+  readonly status: WinThemeStatus;
+  readonly version: number;
+}
+
 export interface PursuitSnapshot {
   readonly id: PursuitSnapshotId;
   readonly pursuit_id: PursuitId;
   readonly label: string;
   readonly created_at: string;
+  readonly nodes: readonly SnapshotNode[];
+  readonly sections: readonly SnapshotSection[];
+  readonly claims: readonly SnapshotClaim[];
+  readonly themes: readonly SnapshotTheme[];
 }
 
 // ---------------------------------------------------------------------------

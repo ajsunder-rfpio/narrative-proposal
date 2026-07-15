@@ -37,6 +37,13 @@ import type {
   AgentName,
   ParseStatus,
   PursuitContext,
+  SnapshotNode,
+  SnapshotSection,
+  SnapshotClaim,
+  SnapshotTheme,
+  EvaluatorReport,
+  EvaluatorFinding,
+  EvaluatorScore,
 } from "./types";
 
 /** Thrown when a caller attempts a write outside its granted scope, or trips a
@@ -131,6 +138,10 @@ export class GraphStore implements CoverageView {
     GenerationRecord
   >();
   private readonly snapshots = new Map<PursuitSnapshot["id"], PursuitSnapshot>();
+  private readonly evaluatorReports = new Map<
+    EvaluatorReport["id"],
+    EvaluatorReport
+  >();
   private readonly pursuitContexts = new Map<PursuitId, PursuitContext>();
   // Outline authorship side-metadata: the object model has no provenance field
   // on OutlineNode, but regeneration must preserve human-edited nodes. Origin
@@ -809,15 +820,98 @@ export class GraphStore implements CoverageView {
     return next;
   }
 
+  /**
+   * Capture an immutable snapshot of the pursuit's graph slice. Every entry is a
+   * fresh COPY of the live state at this instant — later live edits never reach
+   * it. Deep-frozen, so nothing (including the Evaluator) can mutate it.
+   */
   createSnapshot(input: { pursuit_id: PursuitId; label: string }): PursuitSnapshot {
-    const snapshot: PursuitSnapshot = {
+    const liveNodes = this.listNodes(input.pursuit_id);
+
+    const nodes: SnapshotNode[] = liveNodes.map((n) => ({
+      node_id: n.id,
+      parent_id: n.parent_id,
+      order: n.order,
+      title: n.title,
+      annotation: n.annotation,
+      status: n.status,
+    }));
+
+    const sections: SnapshotSection[] = [];
+    const claims: SnapshotClaim[] = [];
+    for (const node of liveNodes) {
+      const section = this.sectionForNode(node.id);
+      if (!section) continue;
+      const content = section.current_revision_id
+        ? this.revisions.get(section.current_revision_id)?.content ?? ""
+        : "";
+      sections.push({
+        section_id: section.id,
+        node_id: node.id,
+        current_revision_id: section.current_revision_id,
+        content,
+      });
+      for (const claim of this.claimsForSection(section.id)) {
+        claims.push({
+          claim_id: claim.id,
+          section_id: section.id,
+          node_id: node.id,
+          text: claim.text,
+          verification_status: claim.verification_status,
+        });
+      }
+    }
+
+    const themes: SnapshotTheme[] = this.listThemes(input.pursuit_id).map((t) => ({
+      theme_id: t.id,
+      kind: t.kind,
+      text: t.text,
+      scope: t.scope,
+      status: t.status,
+      version: t.version,
+    }));
+
+    const snapshot: PursuitSnapshot = deepFreeze({
       id: this.ids.mint("PursuitSnapshot"),
       pursuit_id: input.pursuit_id,
       label: input.label,
       created_at: this.now(),
-    };
-    this.snapshots.set(snapshot.id, deepFreeze(snapshot));
+      nodes,
+      sections,
+      claims,
+      themes,
+    });
+    this.snapshots.set(snapshot.id, snapshot);
     return snapshot;
+  }
+
+  getSnapshot(id: PursuitSnapshot["id"]): PursuitSnapshot | undefined {
+    return this.snapshots.get(id);
+  }
+
+  /**
+   * Record an EvaluatorReport. This is the Evaluator agent's ONLY write — it
+   * touches nothing else in the graph.
+   */
+  addEvaluatorReport(input: {
+    pursuit_id: PursuitId;
+    snapshot_id: PursuitSnapshot["id"] | null;
+    findings: readonly EvaluatorFinding[];
+    scores?: readonly EvaluatorScore[];
+  }): EvaluatorReport {
+    const report: EvaluatorReport = {
+      id: this.ids.mint("EvaluatorReport"),
+      pursuit_id: input.pursuit_id,
+      snapshot_id: input.snapshot_id,
+      findings: input.findings,
+      scores: input.scores ?? [],
+    };
+    this.evaluatorReports.set(report.id, deepFreeze(report));
+    return report;
+  }
+
+  getEvaluatorReport(id: EvaluatorReport["id"]): EvaluatorReport | undefined {
+    return this.evaluatorReports.get(id);
   }
 
   // -------------------------------------------------------------------------
