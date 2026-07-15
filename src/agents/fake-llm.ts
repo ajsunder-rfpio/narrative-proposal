@@ -71,20 +71,38 @@ export class ScriptedLLM extends RecordingLLM {
 }
 
 /**
- * Deliberately hallucinating fake. It ignores the prompt and returns confident,
- * fabricated assertions that are NOT grounded in any provided passage. Agent
- * contract tests use it to prove the pipeline never trusts model output on its
- * own: drafting claims from this fake must end up unverified/flagged, and the
- * Verifier must reject them.
+ * Deliberately hallucinating fake. It ignores the prompt and returns a confident
+ * fabricated *draft*: a claim whose supporting quote is a real snippet (so
+ * Drafting will ground and cite it) but whose asserted text wildly overstates
+ * that snippet — the exact failure mode the Verifier's entailment check exists
+ * to catch. Agent contract tests use it to prove the pipeline never trusts model
+ * output on its own: the fabricated claim survives drafting but must end up
+ * flagged unsupported, with its text still present in the revision.
+ *
+ * Emits the Drafting LLM protocol (a `{ segments: [...] }` object) so it can
+ * stand in as the drafting model directly.
  */
 export class HallucinatingLLM extends RecordingLLM {
-  constructor(
-    private readonly fabrication = "Acme deployed our platform to 4,000 sites in 2019, cutting costs 63%.",
-  ) {
-    super();
-  }
+  /** A snippet the test seeds verbatim into a fixture passage, so the fabricated
+   *  claim clears Drafting's grounding check and the Verifier's quote check. */
+  static readonly QUOTE = "field trials began";
+
+  /** The overstated assertion the snippet does NOT actually support. */
+  static readonly FABRICATION =
+    "Our platform was deployed to 4,000 sites in 2019, cutting costs 63%.";
 
   protected async respond(_request: LLMRequest): Promise<LLMResponse> {
-    return { text: this.fabrication };
+    return {
+      text: JSON.stringify({
+        segments: [
+          { kind: "text", text: "Our track record speaks for itself. " },
+          {
+            kind: "claim",
+            text: HallucinatingLLM.FABRICATION,
+            quote: HallucinatingLLM.QUOTE,
+          },
+        ],
+      }),
+    };
   }
 }

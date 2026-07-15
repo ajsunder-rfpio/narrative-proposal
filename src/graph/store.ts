@@ -623,6 +623,11 @@ export class GraphStore implements CoverageView {
     return citation;
   }
 
+  /** Citations for a claim. Read-only; the Verifier's window onto the evidence. */
+  citationsForClaim(claimId: ClaimId): readonly Citation[] {
+    return [...this.citations.values()].filter((c) => c.claim_id === claimId);
+  }
+
   /**
    * Re-anchor a section's claims onto a new revision. Claims whose span overlaps
    * an edited range are invalidated to `stale`; others keep their verdict. This
@@ -664,6 +669,14 @@ export class GraphStore implements CoverageView {
     return passage;
   }
 
+  getPassage(id: Passage["id"]): Passage | undefined {
+    return this.passages.get(id);
+  }
+
+  getAsset(id: Asset["id"]): Asset | undefined {
+    return this.assets.get(id);
+  }
+
   recordGeneration(input: {
     pursuit_id: PursuitId;
     agent: AgentName;
@@ -684,6 +697,29 @@ export class GraphStore implements CoverageView {
     };
     this.generationRecords.set(record.id, deepFreeze(record));
     return record;
+  }
+
+  getGenerationRecord(id: GenerationRecord["id"]): GenerationRecord | undefined {
+    return this.generationRecords.get(id);
+  }
+
+  /**
+   * Backfill the output-revision link once the revision exists — the
+   * GenerationRecord and SectionRevision reference each other, so one is written
+   * first with a null link and closed here. Not a guarded field.
+   */
+  setGenerationOutput(
+    id: GenerationRecord["id"],
+    revisionId: SectionRevisionId,
+  ): GenerationRecord {
+    const current = this.require(
+      this.generationRecords.get(id),
+      "GenerationRecord",
+      id,
+    );
+    const next = deepFreeze({ ...current, output_revision_id: revisionId });
+    this.generationRecords.set(id, next);
+    return next;
   }
 
   createSnapshot(input: { pursuit_id: PursuitId; label: string }): PursuitSnapshot {
