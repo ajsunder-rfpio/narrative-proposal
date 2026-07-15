@@ -7,7 +7,7 @@ Fourth artifact in the spec sequence. Six MVP surfaces, all ratified. Every surf
 Purpose: AE starts a pursuit, uploads sources, reviews what the Intake agent extracted.
 
 1. Create pursuit: name, account (CRM picker), kind. Defaults to `proactive_proposal`.
-2. Upload transcript, CRM extract, or notes; multiple sources per pursuit; parse status visible per source.
+2. Upload transcript, CRM extract, or notes; multiple sources per pursuit; parse status visible per source. Accepted formats at MVP: .txt, .docx, .csv, and pasted text. PDF is deferred (ratified): the upload zone does not offer it, and a PDF that arrives anyway fails loudly with a reason, never silently.
 3. Extracted context renders as fields (customer, problem, scope, budget signals, stakeholders, competitive mentions), each with a source chip linking to its locator. Same pattern as answer-flow Step 2.
 4. Unfound fields show a "not found" state with an empty editable input, never a guess.
 5. Human edits to any extracted field are marked human-entered and carry no source chip.
@@ -45,7 +45,7 @@ Primary action: Lock themes and start drafting.
 Purpose: AE drafts section by section with AI, reviews claims and citations, fills gaps.
 
 1. Layout: left rail is the outline tree with per-node status (Q&A workspace shell); center is the editor for the selected node.
-2. "Draft this section" is the primary action on an empty node; "Draft all remaining" behind disclosure, with progress and cancel (Bulk AI Draft pattern).
+2. "Draft this section" is the primary action on an empty node; "Draft all remaining (n)" appears as a quiet text link beneath it (ratified: visible but visually subordinate, not behind disclosure), with progress and cancel during the run (Bulk AI Draft pattern).
 3. AI drafts arrive as proposals the user inserts (AIDraftStrip grammar); inserted content settles with the purple-border treatment.
 4. Claims render as subtly marked spans; clicking one opens its citation (source chip pattern: asset name, locator, quote). Marks visible on hover and via a "show claims" toggle, not ambient underlines.
 5. Gap markers ("[no supporting evidence found in library]") render as amber chips inline with one action: "Find evidence" opens retrieval to search the library and attach a passage; or the user rewrites the sentence.

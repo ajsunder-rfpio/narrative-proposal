@@ -25,3 +25,4 @@ coverage
 # Supabase CLI local artifacts
 supabase/.branches
 supabase/.temp
+.DS_Store
