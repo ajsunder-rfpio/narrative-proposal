@@ -170,6 +170,51 @@ export interface RequirementMapping {
 }
 
 // ---------------------------------------------------------------------------
+// PursuitContext — the Intake agent's structured output.
+//
+// SPEC GAP: the ratified object model (object-model.md) does not table "pursuit
+// context", yet the Intake contract (agent-definitions.md #2) says the agent
+// "Writes: Parsed pursuit context; every extracted fact carries a locator to its
+// source." This type is that artifact, modeled as stored pursuit state. It is
+// deliberately NOT a ratified entity — surfaced here rather than smuggled in.
+// ---------------------------------------------------------------------------
+
+export type ContextFieldKey =
+  | "customer"
+  | "problem"
+  | "scope"
+  | "budget_signals"
+  | "stakeholders"
+  | "competitive_mentions";
+
+/** Every extracted fact carries a locator back to the source it came from. */
+export interface SourceLocator {
+  readonly source_id: IntakeSourceId;
+  readonly locator: string;
+}
+
+export interface ContextFact {
+  readonly key: ContextFieldKey;
+  readonly value: string;
+  readonly source: SourceLocator;
+}
+
+export type ContextFieldStatus = "found" | "not_found";
+
+/** One entry per context field. `not_found` is an explicit report, not silence. */
+export interface ContextField {
+  readonly key: ContextFieldKey;
+  readonly status: ContextFieldStatus;
+  readonly facts: readonly ContextFact[];
+}
+
+export interface PursuitContext {
+  readonly pursuit_id: PursuitId;
+  readonly fields: readonly ContextField[];
+  readonly generation_record_id: GenerationRecordId | null;
+}
+
+// ---------------------------------------------------------------------------
 // Structure: OutlineNode + Section + SectionRevision
 // ---------------------------------------------------------------------------
 

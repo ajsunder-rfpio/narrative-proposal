@@ -36,6 +36,7 @@ import type {
   WinThemeScope,
   AgentName,
   ParseStatus,
+  PursuitContext,
 } from "./types";
 
 /** Thrown when a caller attempts a write outside its granted scope, or trips a
@@ -130,6 +131,12 @@ export class GraphStore implements CoverageView {
     GenerationRecord
   >();
   private readonly snapshots = new Map<PursuitSnapshot["id"], PursuitSnapshot>();
+  private readonly pursuitContexts = new Map<PursuitId, PursuitContext>();
+  // Outline authorship side-metadata: the object model has no provenance field
+  // on OutlineNode, but regeneration must preserve human-edited nodes. Origin
+  // and template-key are tracked here so ids stay stable and human edits survive.
+  private readonly nodeOrigin = new Map<OutlineNodeId, "agent" | "human">();
+  private readonly nodeTemplateKey = new Map<OutlineNodeId, string>();
 
   constructor(opts: GraphStoreOptions = {}) {
     this.now = opts.clock ?? (() => new Date().toISOString());
@@ -254,6 +261,17 @@ export class GraphStore implements CoverageView {
     };
     this.intakeSources.set(source.id, deepFreeze(source));
     return source;
+  }
+
+  /** The Intake agent's parsed context. Latest wins; stored as-is (frozen). */
+  setPursuitContext(context: PursuitContext): PursuitContext {
+    const frozen = deepFreeze(context);
+    this.pursuitContexts.set(context.pursuit_id, frozen);
+    return frozen;
+  }
+
+  getPursuitContext(pursuitId: PursuitId): PursuitContext | undefined {
+    return this.pursuitContexts.get(pursuitId);
   }
 
   // -------------------------------------------------------------------------
@@ -385,7 +403,51 @@ export class GraphStore implements CoverageView {
       this.sectionByNode.delete(id);
       this.sections.delete(sectionId);
     }
+    this.nodeOrigin.delete(id);
+    this.nodeTemplateKey.delete(id);
     this.ids.retire(id);
+  }
+
+  /**
+   * Record that the Outline agent authored this node under a template key. Does
+   * not downgrade a node a human has since taken over — origin stays "human".
+   */
+  tagOutlineNode(nodeId: OutlineNodeId, templateKey: string): void {
+    this.require(this.nodes.get(nodeId), "OutlineNode", nodeId);
+    this.nodeTemplateKey.set(nodeId, templateKey);
+    if (this.nodeOrigin.get(nodeId) !== "human") {
+      this.nodeOrigin.set(nodeId, "agent");
+    }
+  }
+
+  outlineNodeOrigin(nodeId: OutlineNodeId): "agent" | "human" | undefined {
+    return this.nodeOrigin.get(nodeId);
+  }
+
+  findOutlineNodeByTemplateKey(
+    pursuitId: PursuitId,
+    templateKey: string,
+  ): OutlineNode | undefined {
+    for (const [nodeId, key] of this.nodeTemplateKey) {
+      if (key !== templateKey) continue;
+      const node = this.nodes.get(nodeId);
+      if (node && node.pursuit_id === pursuitId) return node;
+    }
+    return undefined;
+  }
+
+  /**
+   * A human takes over a node: applies the edit and marks it human-authored, so a
+   * later Outline regeneration preserves it verbatim (id included). Distinct from
+   * the generic setters the Outline agent uses on its own nodes.
+   */
+  editNodeAsHuman(
+    id: OutlineNodeId,
+    patch: Partial<Omit<OutlineNode, "id" | "pursuit_id">>,
+  ): OutlineNode {
+    const next = this.patchNode(id, patch);
+    this.nodeOrigin.set(id, "human");
+    return next;
   }
 
   private patchNode(
@@ -527,6 +589,31 @@ export class GraphStore implements CoverageView {
   lockTheme(id: WinThemeId, _humanUserId: UserId): WinTheme {
     const current = this.require(this.themes.get(id), "WinTheme", id);
     const next = deepFreeze({ ...current, status: "locked" as const });
+    this.themes.set(id, next);
+    return next;
+  }
+
+  listThemes(pursuitId: PursuitId): readonly WinTheme[] {
+    return [...this.themes.values()].filter((t) => t.pursuit_id === pursuitId);
+  }
+
+  /**
+   * A human edits a theme's content. The Theme agent has NO update path — it only
+   * ever creates new drafts — so this is the sole way a theme's text changes.
+   * Status is preserved; regeneration adds alongside and never touches this.
+   */
+  editThemeAsHuman(
+    id: WinThemeId,
+    patch: Partial<Pick<WinTheme, "text" | "kind" | "scope">>,
+    _humanUserId: UserId,
+  ): WinTheme {
+    const current = this.require(this.themes.get(id), "WinTheme", id);
+    const next = deepFreeze({
+      ...current,
+      ...patch,
+      id: current.id,
+      status: current.status,
+    });
     this.themes.set(id, next);
     return next;
   }

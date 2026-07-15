@@ -91,7 +91,26 @@ export class HallucinatingLLM extends RecordingLLM {
   static readonly FABRICATION =
     "Our platform was deployed to 4,000 sites in 2019, cutting costs 63%.";
 
-  protected async respond(_request: LLMRequest): Promise<LLMResponse> {
+  protected async respond(request: LLMRequest): Promise<LLMResponse> {
+    // Still ignores the actual prompt — it fabricates regardless of input — but
+    // fabricates in the shape the calling agent expects, so it can stand in for
+    // any model in the pipeline.
+    if (request.purpose === "intake") {
+      // A fact citing a source that doesn't exist, with a quote absent from any
+      // real source: the Intake agent must drop it, never store it.
+      return {
+        text: JSON.stringify({
+          facts: [
+            {
+              key: "customer",
+              value: HallucinatingLLM.FABRICATION,
+              source_id: "IntakeSource_hallucinated",
+              quote: HallucinatingLLM.QUOTE,
+            },
+          ],
+        }),
+      };
+    }
     return {
       text: JSON.stringify({
         segments: [
