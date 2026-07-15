@@ -21,3 +21,7 @@ package-lock.json
 # Test / tooling caches
 coverage
 .vitest
+
+# Supabase CLI local artifacts
+supabase/.branches
+supabase/.temp
