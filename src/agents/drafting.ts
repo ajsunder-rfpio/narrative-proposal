@@ -1,4 +1,4 @@
-import type { GraphStore } from "../graph/store";
+import type { GraphStore } from "../graph/store.ts";
 import type {
   Citation,
   Claim,
@@ -8,9 +8,9 @@ import type {
   SectionRevision,
   StyleGuide,
   WinTheme,
-} from "../graph/types";
-import type { LLM, LLMMessage } from "./fake-llm";
-import type { RetrievedPassage, Retriever } from "./retrieval";
+} from "../graph/types.ts";
+import type { LLM, LLMMessage } from "./fake-llm.ts";
+import type { RetrievedPassage, Retriever } from "./retrieval.ts";
 
 // ---------------------------------------------------------------------------
 // Drafting agent (agent-definitions.md #5)

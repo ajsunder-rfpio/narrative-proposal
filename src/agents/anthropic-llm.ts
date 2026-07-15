@@ -1,4 +1,4 @@
-import type { LLM, LLMRequest, LLMResponse } from "./fake-llm";
+import type { LLM, LLMRequest, LLMResponse } from "./fake-llm.ts";
 
 // ---------------------------------------------------------------------------
 // Production LLM adapter: Anthropic Messages API.

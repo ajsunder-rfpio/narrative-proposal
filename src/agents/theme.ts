@@ -1,4 +1,4 @@
-import type { GraphStore } from "../graph/store";
+import type { GraphStore } from "../graph/store.ts";
 import type {
   GenerationRecord,
   OutlineNodeId,
@@ -7,8 +7,8 @@ import type {
   WinTheme,
   WinThemeKind,
   WinThemeScope,
-} from "../graph/types";
-import type { LLM, LLMMessage } from "./fake-llm";
+} from "../graph/types.ts";
+import type { LLM, LLMMessage } from "./fake-llm.ts";
 
 // ---------------------------------------------------------------------------
 // Theme agent (agent-definitions.md #4)

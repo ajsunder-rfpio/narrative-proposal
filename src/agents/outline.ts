@@ -1,4 +1,4 @@
-import type { GraphStore } from "../graph/store";
+import type { GraphStore } from "../graph/store.ts";
 import type {
   GenerationRecord,
   OutlineNode,
@@ -6,8 +6,8 @@ import type {
   PursuitContext,
   PursuitId,
   StyleGuide,
-} from "../graph/types";
-import type { LLM, LLMMessage } from "./fake-llm";
+} from "../graph/types.ts";
+import type { LLM, LLMMessage } from "./fake-llm.ts";
 
 // ---------------------------------------------------------------------------
 // Outline agent (agent-definitions.md #3)

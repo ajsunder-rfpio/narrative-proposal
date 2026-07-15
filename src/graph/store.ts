@@ -1,5 +1,5 @@
-import { computeCoverageStatus, type CoverageView } from "./coverage";
-import { IdFactory } from "./ids";
+import { computeCoverageStatus, type CoverageView } from "./coverage.ts";
+import { IdFactory } from "./ids.ts";
 import type {
   Authorship,
   Citation,
@@ -44,7 +44,7 @@ import type {
   EvaluatorReport,
   EvaluatorFinding,
   EvaluatorScore,
-} from "./types";
+} from "./types.ts";
 
 /**
  * A pursuit's full graph state, serialized. The persistence seam between the

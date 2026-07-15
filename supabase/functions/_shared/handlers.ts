@@ -1,4 +1,4 @@
-import { GraphStore } from "../../../src/graph/store";
+import { GraphStore } from "../../../src/graph/store.ts";
 import type {
   ClaimId,
   OutlineNodeId,
@@ -6,12 +6,12 @@ import type {
   PursuitId,
   PursuitSnapshotId,
   StyleGuide,
-} from "../../../src/graph/types";
-import type { LLM } from "../../../src/agents/fake-llm";
-import type { SourceContentReader } from "../../../src/agents/intake";
-import type { Retriever } from "../../../src/agents/retrieval";
-import type { OutlineTemplate } from "../../../src/agents/outline";
-import type { GraphRepository } from "./repository";
+} from "../../../src/graph/types.ts";
+import type { LLM } from "../../../src/agents/fake-llm.ts";
+import type { SourceContentReader } from "../../../src/agents/intake.ts";
+import type { Retriever } from "../../../src/agents/retrieval.ts";
+import type { OutlineTemplate } from "../../../src/agents/outline.ts";
+import type { GraphRepository } from "./repository.ts";
 import {
   HttpError,
   json,
@@ -19,7 +19,7 @@ import {
   requireAuth,
   withErrors,
   type TokenVerifier,
-} from "./http";
+} from "./http.ts";
 
 // ---------------------------------------------------------------------------
 // One thin handler per agent action. Each: authenticate -> load graph state ->

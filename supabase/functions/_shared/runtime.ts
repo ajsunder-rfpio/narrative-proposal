@@ -4,11 +4,11 @@
 import { serviceClient, makeTokenVerifier } from "./supabase-client.ts";
 import { SupabaseGraphRepository } from "./repository-supabase.ts";
 import { loadConfig, anthropicApiKey } from "./config.ts";
-import { AnthropicLLM } from "../../../src/agents/anthropic-llm";
-import { InMemoryLibrary, type Retriever } from "../../../src/agents/retrieval";
-import type { SourceContentReader } from "../../../src/agents/intake";
-import type { GraphStore } from "../../../src/graph/store";
-import type { Asset, Passage } from "../../../src/graph/types";
+import { AnthropicLLM } from "../../../src/agents/anthropic-llm.ts";
+import { InMemoryLibrary, type Retriever } from "../../../src/agents/retrieval.ts";
+import type { SourceContentReader } from "../../../src/agents/intake.ts";
+import type { GraphStore } from "../../../src/graph/store.ts";
+import type { Asset, Passage } from "../../../src/graph/types.ts";
 
 export function baseRuntime() {
   const client = serviceClient();

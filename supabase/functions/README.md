@@ -31,10 +31,13 @@ against it, then `.save` dehydrates it back (via `GraphStore.exportPursuit` /
 synchronously and agents call it without `await` — so the async DB boundary
 lives in the repository, not in the store.
 
-`_shared/deno.json` enables `sloppy-imports` so Deno can resolve the
-extensionless relative imports in `src/` without editing source. If your
-Supabase CLI does not honor it, the handler logic is still fully covered by the
-vitest tests; only the Deno deployment path depends on it.
+The edge bundle graph (everything under `supabase/functions/` plus the
+`src/agents` and `src/graph` modules the entrypoints import) uses explicit
+`.ts` import extensions. The Supabase CLI's bundled Deno runtime requires them
+(it does not honor `sloppy-imports`), and Vite/Node accept them via
+`allowImportingTsExtensions` in `tsconfig.json` — so both sides resolve the same
+files. The UI, tests, and the barrel/`orchestrator` modules are not in the edge
+bundle and keep the extensionless style.
 
 ## Dev loop
 

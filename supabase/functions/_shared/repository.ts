@@ -1,5 +1,5 @@
-import { GraphStore } from "../../../src/graph/store";
-import type { PursuitId } from "../../../src/graph/types";
+import { GraphStore } from "../../../src/graph/store.ts";
+import type { PursuitId } from "../../../src/graph/types.ts";
 
 // The persistence abstraction the handlers depend on. Two implementations:
 //   - InMemoryGraphRepository (here) — dev/local, and the seam handler tests

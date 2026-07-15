@@ -1,4 +1,4 @@
-import type { GraphStore } from "../graph/store";
+import type { GraphStore } from "../graph/store.ts";
 import type {
   ContextField,
   ContextFact,
@@ -7,8 +7,8 @@ import type {
   IntakeSource,
   PursuitContext,
   PursuitId,
-} from "../graph/types";
-import type { LLM, LLMMessage } from "./fake-llm";
+} from "../graph/types.ts";
+import type { LLM, LLMMessage } from "./fake-llm.ts";
 
 // ---------------------------------------------------------------------------
 // Intake agent (agent-definitions.md #2)

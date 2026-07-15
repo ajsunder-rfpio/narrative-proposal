@@ -7,7 +7,7 @@ import type {
   RequirementMapping,
   Section,
   SectionId,
-} from "./types";
+} from "./types.ts";
 
 /**
  * Read-only slice of the graph that coverage derivation needs. The store

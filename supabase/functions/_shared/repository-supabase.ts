@@ -8,9 +8,9 @@
 // normalization is a follow-up; the seam already round-trips losslessly.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GraphStore, type PursuitExport } from "../../../src/graph/store";
-import type { PursuitId } from "../../../src/graph/types";
-import type { GraphRepository } from "./repository";
+import { GraphStore, type PursuitExport } from "../../../src/graph/store.ts";
+import type { PursuitId } from "../../../src/graph/types.ts";
+import type { GraphRepository } from "./repository.ts";
 
 // deno-lint-ignore no-explicit-any
 type Row = any;

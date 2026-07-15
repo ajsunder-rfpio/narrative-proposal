@@ -1,4 +1,4 @@
-import type { Asset, Passage } from "../graph/types";
+import type { Asset, Passage } from "../graph/types.ts";
 
 // Minimal retrieval seam over a fixture library. This is the INTERFACE the
 // Drafting agent depends on; retrieval *quality* (embeddings, real RAG) is a

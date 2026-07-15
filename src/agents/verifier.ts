@@ -1,6 +1,6 @@
-import type { GraphStore } from "../graph/store";
-import type { Claim, ClaimId, Passage } from "../graph/types";
-import type { LLM, LLMMessage } from "./fake-llm";
+import type { GraphStore } from "../graph/store.ts";
+import type { Claim, ClaimId, Passage } from "../graph/types.ts";
+import type { LLM, LLMMessage } from "./fake-llm.ts";
 
 // ---------------------------------------------------------------------------
 // Verifier agent (agent-definitions.md #6)
