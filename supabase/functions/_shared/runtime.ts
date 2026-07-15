@@ -46,10 +46,23 @@ function once<T>(factory: () => T): () => T {
   };
 }
 
-// Module-level lazy Supabase client, shared by every env-backed dependency.
-// serviceClient() (which reads SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) runs
-// only on first use, never at import.
-const lazyClient = once(() => serviceClient());
+// TWO separate service-role clients, both built lazily (env read only on first
+// use, never at import).
+//
+//   - authClient is used ONLY to verify the caller's JWT (auth.getUser). That
+//     call scopes the client instance to the caller, so it must never be reused
+//     for data access.
+//   - dataClient is used ONLY for graph tables and Storage, and is never touched
+//     by auth. It stays the service-role identity the trusted function needs to
+//     read/write the RLS-deny-by-default graph tables.
+//
+// Before this split a single shared client did both: after getUser() the
+// repository's PostgREST queries ran as the caller (no grants/policies) and
+// failed with "permission denied for table pursuits". Deny-by-default is
+// intentional — the trusted, already-authenticated function reaches the graph
+// via the service role, not by granting anon/authenticated any access.
+const authClient = once(() => serviceClient());
+const dataClient = once(() => serviceClient());
 
 export interface BaseRuntime {
   repository: GraphRepository;
@@ -67,14 +80,15 @@ export function baseRuntime(): BaseRuntime {
   );
 
   // Invoked by requireAuth only after its header check, so a request with no
-  // bearer token never constructs the Supabase client.
+  // bearer token never constructs the Supabase client. Uses the auth-only client.
   const verifyToken = (token: string) =>
-    makeTokenVerifier(lazyClient())(token);
+    makeTokenVerifier(authClient())(token);
 
+  // Graph access goes through the dedicated service-role dataClient.
   const repository: GraphRepository = {
-    load: (id: PursuitId) => new SupabaseGraphRepository(lazyClient()).load(id),
+    load: (id: PursuitId) => new SupabaseGraphRepository(dataClient()).load(id),
     save: (id: PursuitId, store: GraphStore) =>
-      new SupabaseGraphRepository(lazyClient()).save(id, store),
+      new SupabaseGraphRepository(dataClient()).save(id, store),
   };
   const llm: LLM = {
     complete: (request: LLMRequest): Promise<LLMResponse> =>
@@ -110,7 +124,8 @@ function splitStorageUri(uri: string): { bucket: string; path: string } {
 const storage: StorageObjectReader = {
   async download(uri: string): Promise<Uint8Array> {
     const { bucket, path } = splitStorageUri(uri);
-    const { data, error } = await lazyClient().storage.from(bucket).download(path);
+    // Service-role dataClient — the intake-sources bucket is private (no policies).
+    const { data, error } = await dataClient().storage.from(bucket).download(path);
     if (error || !data) {
       throw new Error(error?.message ?? `object not found: ${uri}`);
     }
